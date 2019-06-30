@@ -1,3 +1,6 @@
-function useEffect(callback) {
-  setTimeout(callback);
+function ue(...arguments) {
+  return callback => {
+    setTimeout(() => callback(...arguments));
+    return callback;
+  };
 }

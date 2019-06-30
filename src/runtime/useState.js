@@ -1,6 +1,10 @@
-function useState(update) {
+function us(update) {
   return initialState => {
     let state = initialState;
+
+    if (typeof initialState === "function") {
+      state = initialState();
+    }
 
     return [
       state,

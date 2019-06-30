@@ -2,9 +2,13 @@ const fs = require("fs");
 const t = require("@babel/core").types;
 const { parse } = require("@babel/parser");
 
-const stateVarNames = {};
+const stateVarNames = {
+  global: []
+};
 const varNamesCount = {};
 const runtimeFns = {};
+
+const updateId = t.Identifier("u");
 
 function getVarName(argument) {
   const tag = argument.value;
@@ -15,59 +19,31 @@ function getVarName(argument) {
   return `${tag}${varNamesCount[tag]}`;
 }
 
-function isReactCreateElement(node) {
-  if (
-    node &&
+function isReactFnName(node, name) {
+  return (
     node.callee &&
-    node.callee.object &&
-    node.callee.property &&
-    node.callee.object.name === "React" &&
-    node.callee.property.name === "createElement"
-  ) {
-    return true;
-  }
-
-  return false;
+    ((node.callee.name && node.callee.name === name) ||
+      (node.callee.object &&
+        node.callee.property &&
+        node.callee.object.name === "React" &&
+        node.callee.property.name === name))
+  );
 }
 
-function isReactCreateElementArgument(node) {
-  if (isReactCreateElement(node)) return true;
-
-  return false;
+function isReactCreateElement(node) {
+  return isReactFnName(node, "createElement");
 }
 
 function isReactUseState(node) {
-  if (
-    node &&
-    node.callee &&
-    node.callee.object &&
-    node.callee.property &&
-    node.callee.object.name === "React" &&
-    node.callee.property.name === "useState"
-  ) {
-    return true;
-  }
-
-  return false;
+  return isReactFnName(node, "useState");
 }
 
 function isReactUseEffect(node) {
-  if (
-    node &&
-    node.callee &&
-    node.callee.object &&
-    node.callee.property &&
-    node.callee.object.name === "React" &&
-    node.callee.property.name === "useEffect"
-  ) {
-    return true;
-  }
-
-  return false;
+  return isReactFnName(node, "useEffect");
 }
 
 function createReactElement(node, isChild) {
-  node.callee = node.callee.property;
+  node.callee = t.Identifier("ce");
 
   const varNames = [];
   let varName;
@@ -121,7 +97,7 @@ function createReactElement(node, isChild) {
         return t.AssignmentExpression(
           "=",
           t.Identifier(childVarName),
-          t.CallExpression(t.Identifier("createTextNode"), [value])
+          t.CallExpression(t.Identifier("ctn"), [value])
         );
       } else if (argument.type === "CallExpression") {
         if (isReactCreateElement(argument)) {
@@ -165,9 +141,10 @@ function createRuntimeFn(body, fnName) {
 }
 
 function CallExpressionExit(path) {
+  // If is a React.createElement call not inside another React.createElement
   if (
     isReactCreateElement(path.node) &&
-    !isReactCreateElementArgument(path.parentPath.node)
+    !isReactCreateElement(path.parentPath.node)
   ) {
     if (path.container.type === "VariableDeclarator") {
       runtimeFns.createElement = true;
@@ -191,22 +168,54 @@ function CallExpressionExit(path) {
   } else if (isReactUseState(path.node)) {
     runtimeFns.useState = true;
 
-    const varName = path.getStatementParent().node.declarations[0].id
-      .elements[0].name;
+    if (path.getFunctionParent().node.id.name.startsWith("use")) {
+      path.node.callee = t.CallExpression(t.Identifier("us"), [updateId]);
+    } else {
+      // TODO: for now we accept only const [x, y] = ... approach
+      const varName = path.getStatementParent().node.declarations[0].id
+        .elements[0].name;
 
-    stateVarNames[varName] = [];
+      stateVarNames[varName] = stateVarNames[varName] || [];
 
-    path.node.callee = t.CallExpression(path.node.callee.property, [
-      t.ArrowFunctionExpression(
-        [],
-        t.MemberExpression(t.Identifier("update"), t.Identifier(varName)),
-        false
-      )
-    ]);
+      path.node.callee = t.CallExpression(t.Identifier("us"), [
+        t.ArrowFunctionExpression(
+          [],
+          t.MemberExpression(updateId, t.Identifier(varName)),
+          false
+        )
+      ]);
+    }
   } else if (isReactUseEffect(path.node)) {
     runtimeFns.useEffect = true;
 
-    path.node.callee = path.node.callee.property;
+    const varName = getVarName({ value: "effect" });
+
+    path.node.callee = t.CallExpression(t.Identifier("ue"), []);
+
+    path.parentPath.replaceWith(
+      t.VariableDeclaration("const", [
+        t.VariableDeclarator(t.Identifier(varName), path.node)
+      ])
+    );
+
+    stateVarNames.global.push(
+      t.ExpressionStatement(t.CallExpression(t.Identifier(varName), []))
+    );
+
+    // TODO: check how can we do to run useEffect again
+  } else if (path.node.calee && path.node.callee.name.startsWith("use")) {
+    // TODO: for now we accept only const [x, y] = ... approach
+    const varName = path.getStatementParent().node.declarations[0].id.name;
+
+    stateVarNames[varName] = [];
+
+    path.node.callee = t.CallExpression(path.node.callee, [
+      t.ArrowFunctionExpression(
+        [],
+        t.MemberExpression(updateId, t.Identifier(varName)),
+        false
+      )
+    ]);
   }
 }
 
@@ -242,30 +251,47 @@ function ProgramExit(path) {
 }
 
 function FunctionDeclarationExit(path) {
-  const { body } = path.node.body;
+  // If the fn starts with uppercase, it's a component
+  if (path.node.id.name[0] === path.node.id.name[0].toUpperCase()) {
+    const { body } = path.node.body;
 
-  if (runtimeFns.useState) {
-    body.unshift(parse("const update = {};"));
-  }
+    if (runtimeFns.useState) {
+      body.unshift(parse("const u = {};"));
+    }
 
-  const returnStatement = body[body.length - 1];
-  delete body[body.length - 1];
+    const returnStatement = body[body.length - 1];
+    delete body[body.length - 1];
 
-  Object.entries(stateVarNames).map(([varName, expressions]) => {
-    body.push(
-      t.AssignmentExpression(
-        "=",
-        t.MemberExpression(t.Identifier("update"), t.Identifier(varName)),
+    Object.entries(stateVarNames).forEach(([varName, expressions]) => {
+      if (varName !== "global") {
+        body.push(
+          t.AssignmentExpression(
+            "=",
+            t.MemberExpression(updateId, t.Identifier(varName)),
+            t.ArrowFunctionExpression(
+              [t.Identifier(varName)],
+              t.BlockStatement([...expressions, ...stateVarNames.global], []),
+              false
+            )
+          )
+        );
+      }
+    });
+
+    body.push(returnStatement);
+  } else if (path.node.id.name.startsWith("use")) {
+    path.node.body.body = [
+      t.ReturnStatement(
         t.ArrowFunctionExpression(
-          [t.Identifier(varName)],
-          t.BlockStatement(expressions, []),
+          path.node.params,
+          t.BlockStatement(path.node.body.body, []),
           false
         )
       )
-    );
-  });
+    ];
 
-  body.push(returnStatement);
+    path.node.params = [updateId];
+  }
 }
 
 module.exports = () => ({
