@@ -1,8 +1,30 @@
 {
   "name": "babel-plugin-react-aot",
   "version": "0.0.1",
-  "main": "index.js",
-  "license": "MIT",
+  "description": "Transform your React Component into Vanilla Javascript Code",
+  "keywords": [
+    "babel",
+    "React",
+    "ahead of time",
+    "aot",
+    "vanilla"
+  ],
+  "homepage": "https://github.com/marceloadsj/babel-plugin-react-aot#readme",
+  "bugs": "https://github.com/marceloadsj/babel-plugin-react-aot/issues",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "author": {
+    "name": "Marcelo Junior",
+    "email": "marceloadsj1@gmail.com",
+    "url": "https://www.linkedin.com/in/marcelojr1"
+  },
+  "main": "src/index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/marceloadsj/babel-plugin-react-aot"
+  },
+  "scripts": {
+    "start": "nodemon --ignore 'out.js' devStart.js"
+  },
   "dependencies": {
     "@babel/core": "^7.4.5",
     "@babel/helper-plugin-utils": "^7.0.0",
@@ -11,8 +33,5 @@
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "^7.3.0",
     "nodemon": "^1.19.1"
-  },
-  "scripts": {
-    "start": "nodemon --ignore 'out.js' transform.js"
   }
 }
