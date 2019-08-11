@@ -9,54 +9,63 @@
 Basically, it's a extremely WIP plugin for Babel to parse **React Components** into **Vanilla Javascript Code**, removing the needed to use the React virtual dom, diff and reconciliation algorithm.
 
 This React Code:
-```javascript
-function Component() {
-  const [count, setCount] = React.useState(0);
 
-  React.useEffect(() => {
-    setInterval(() => {
-      setCount(count => count + 1);
-    }, 250);
-  }, []);
+```javascript
+function Message() {
+  return <p>Hello World</p>;
+}
+
+function App() {
+  const [show, setShow] = React.useState(false);
 
   return (
     <div>
-      Counting: {count}, {count * 2}
+      <button onClick={() => setShow(value => !value)}>Show</button>
+      <br />
+      {show && <Message />}
     </div>
   );
 }
+
+ReactDOM.render(<App />, document.querySelector("#app"));
 ```
 
 Turn into this Vanilla Javascript Code:
+
 ```javascript
-function Component() {
-  const update = {};
+function Message() {
+  let _p1;
 
-  const [count, setCount] = useState(() => update.count)(0);
+  return (_p1 = _createElement("p", null, "Hello World"));
+}
 
-  useEffect(() => {
-    setInterval(() => {
-      setCount(count => count + 1);
-    }, 250);
-  }, []);
+function App() {
+  const _update = {};
 
-  let div1, text1, text2, text3, text4;
-  div1 = createElement(
-    "div",
-    null,
-    (text1 = createTextNode("Counting: ")),
-    (text2 = createTextNode(count)),
-    (text3 = createTextNode(", ")),
-    (text4 = createTextNode(count * 2))
-  );
+  const [show, setShow] = _useState(() => _update.show)(false);
 
-  update.count = count => {
-    text2.data = count;
-    text4.data = count * 2;
+  let _div1;
+
+  _update.show = show => {
+    _div1.children[2].replaceWith(show && _createElement(Message, null));
   };
 
-  return div1;
+  return (_div1 = _createElement(
+    "div",
+    null,
+    _createElement(
+      "button",
+      {
+        onClick: () => setShow(value => !value)
+      },
+      "Show"
+    ),
+    _createElement("br", null),
+    show && _createElement(Message, null)
+  ));
 }
+
+_render(_createElement(App, null), document.querySelector("#app"));
 ```
 
 ---
@@ -64,11 +73,3 @@ function Component() {
 ### Runtime API
 
 You can see that there are some runtime functions to help with the DOM API and the React Hooks API itself. It will be injected on the generated code when needed.
-
----
-
-## License
-
-For now, I would like to keep the project private but open sourced. After I manage to publish a stable version, I will change the license to public so, anyone can use as you want.
-
-`If you want to contribute, fell free to create an issue :-)`

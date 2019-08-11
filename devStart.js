@@ -11,9 +11,14 @@ const code = fs.readFileSync(`${__dirname}/in.js`).toString();
 
 console.log("Transforming the Code");
 
-const transformedCode = babel.transform(code, {
+let transformedCode = babel.transform(code, {
   plugins: ["@babel/plugin-transform-react-jsx", plugin]
-  // plugins: ["@babel/plugin-transform-react-jsx"]
+}).code;
+
+console.log("Formatting the Code");
+
+transformedCode = babel.transform(transformedCode, {
+  plugins: ["generator-prettier"]
 }).code;
 
 console.log("Saving the Result");

@@ -1,4 +1,4 @@
-function us(update) {
+function _useState(update) {
   return initialState => {
     let state = initialState;
 
